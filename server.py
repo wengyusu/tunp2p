@@ -1,6 +1,13 @@
 from socket import *
 import json
 import sys
+from optparse import OptionParser
+
+usage = "%prog -P port"
+parser = OptionParser(usage=usage)
+parser.add_option("-P", "--port", help="target's port default:%default", metavar="PORT",dest="port",default=9999,type=int)
+(opts, args) = parser.parse_args()
+
 FullCone = "Full Cone"  # 0
 RestrictNAT = "Restrict NAT"  # 1
 RestrictPortNAT = "Restrict Port NAT"  # 2
@@ -158,8 +165,7 @@ class udpserver:
         self.s.close()  
 
 if __name__ == "__main__":
-    PORT=9999
-    server=udpserver(PORT)
+    server=udpserver(opts.port)
     try:
         server.start()
     except Exception as e:

@@ -8,11 +8,11 @@ import threading
 import time
 from optparse import OptionParser
 
-usage = "usage: %prog -H host -P port [-R RID -N nat-type]"
+usage = "usage: %prog -H host -P port [-R RID [-N nat-type] ]"
 parser = OptionParser(usage=usage)
-parser.add_option("-H", "--host", help="target's host", metavar="HOST",dest="host",default="localhost")  
-parser.add_option("-P", "--port", help="target's port", metavar="PORT",dest="port",default=9999,type=int)
-parser.add_option("-R", "--rid", help="room's ID", metavar="ID",dest="rid",default=100)
+parser.add_option("-H", "--host", help="target's host", metavar="HOST",dest="host")  
+parser.add_option("-P", "--port", help="target's port default:%default", metavar="PORT",dest="port",default=9999,type=int)
+parser.add_option("-R", "--rid", help="room's ID default:%default", metavar="ID",dest="rid",default=100)
 parser.add_option("-N", "--nat-type", help="0:Full Cone 1:Restrict NAT 2:Restrict Port NAT 3:Symmetric NAT", metavar="NAT-TYPE(number)",dest="nat_type",default=None,type=int)        
 (opts, args) = parser.parse_args()
 
