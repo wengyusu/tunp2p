@@ -1,6 +1,8 @@
 # tunp2p
 利用UDP打洞实现NAT穿越的P2P通讯（STUN），而如果任意一方是Symmetric NAT，则服务器将会起到中继的功能（TURN）
+
 利用了pystun的部分代码实现获取NAT类型的功能[pystun](https://github.com/jtriley/pystun)
+
 stun.py是从pystun上扒下来的单独的检测NAT类型和External IP的程序，被我改成了适用于py3的版本
 ## Usage
 ### Server.py
