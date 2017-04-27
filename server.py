@@ -80,29 +80,8 @@ class udpserver:
             except Exception as e:
                 print(e)
 
-            # operation={
-            #     "login":self.login,
-            #     # "showusers":self.showusers,
-            #     # "connect":self.connect,
-            #     # "logout":self.logout,
-            #     "punch":self.punch_rev,
-            # }
-            # operation.get(data["command"],self.error)(data,client_address)
-            # try:
-            # nat_type=data['nat_type']
-            # rid=data['rid']
-            # self.s.sendto(b'this is the UDP server',client_address)
-
     def login(self,data,client_address):
         print("has a user login:{0[0]}:{0[1]}".format(client_address))
-        # if self.users['userlist']!=[]:
-        #     for i in self.users['userlist']:
-        #         if client_address == i['address']:
-        #             self.s.sendto(b'Alread logged in',client_address)
-        #             break
-        #     else:
-        #         self.adduser(data,client_address)
-        # else:
         self.adduser(data,client_address)
           
 
@@ -124,32 +103,6 @@ class udpserver:
         print("error happened")
         self.close()
 
-    # def showusers(self,_,client_address):
-    #     self.s.sendto(str(self.users['userlist']).encode(),client_address)
-            
-
-    def connect(self,data,client_address):
-        partner_info=requester_info=None
-        try:
-            uid=data['uid']
-            print("recieve connect request")
-        except IndexError :
-            self.s.sendto(b"please send uid",client_address)
-        for userinfo in self.users['userlist']:
-            if str(uid)==str(userinfo['uid']):
-                partner_info=userinfo
-                break
-        else:
-            print("partner uid no found")
-        for userinfo in self.users['userlist']:
-            if client_address==userinfo['address']:
-                requester_info=userinfo
-                break
-        else:
-            print("requester uid no found")
-        if partner_info and requester_info:
-            self.s.sendto(str(partner_info).encode(),client_address)
-            self.s.sendto(str(requester_info).encode(),partner_info['address'])
 
     def logout(self,_,client_address):
         for index,item in enumerate(self.users['userlist']):

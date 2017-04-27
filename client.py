@@ -124,35 +124,12 @@ class udpclient:
         print(args[0])
         print('error')
 
-    def logout(self,*args,**kwargs):
-        data={
-            "command":"logout",
-        }
-        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
-        res=self.clientsocket.recvfrom(1024)
-        print(res)
 
     def close(self,*args,**kwargs):
         try:
             self.clientsocket.close()
         except Exception as e:
             print(e)
-
-    def connect(self,*args,**kwargs):
-        uid=input("Please input the uid\n")
-        data={
-        'command':'connect',
-        'uid':uid,
-        }
-        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
-        res, _ =self.clientsocket.recvfrom(1024)
-        print(res)
-        try:
-            data=json.loads(res.decode().replace("'",'"'))
-        except Exception as e:
-            print(e)
-
-
         
     def punch(self,*args,**kwargs):
         count=0
