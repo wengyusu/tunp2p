@@ -2,31 +2,178 @@ import socket
 import sys
 import random
 import binascii
+import json
 import logging
+import threading
+import time
 from optparse import OptionParser
 
-usage = "usage: %prog -H arg1 -P arg2"
+usage = "usage: %prog -H host -P port [-R RID -N nat-type]"
 parser = OptionParser(usage=usage)
 parser.add_option("-H", "--host", help="target's host", metavar="HOST",dest="host",default="localhost")  
-parser.add_option("-P", "--port", help="target's port", metavar="PORT",dest="port",default=9999,type=int)   
+parser.add_option("-P", "--port", help="target's port", metavar="PORT",dest="port",default=9999,type=int)
+parser.add_option("-R", "--rid", help="room's ID", metavar="ID",dest="rid",default=100)
+parser.add_option("-N", "--nat-type", help="0:Full Cone 1:Restrict NAT 2:Restrict Port NAT 3:Symmetric NAT", metavar="NAT-TYPE(number)",dest="nat_type",default=None,type=int)        
 (opts, args) = parser.parse_args()
-# try:
-#     opts, args=getopt.getopt(sys.argv[1:],"h:p:",["host=","port="])
-# except getopt.GetoptError as e:
-#     print(e)
-#     sys.exit()
-# for name,value in opts:
-#     if name in ("--host","-h"):
-#         host=value
-#     if name in ("--port","-p"):
-#         port=value
-    # if name in ("--command","-c"):
-    #     command=value
+
+FullCone = "Full Cone"  # 0
+RestrictNAT = "Restrict NAT"  # 1
+RestrictPortNAT = "Restrict Port NAT"  # 2
+SymmetricNAT = "Symmetric NAT"  # 3
+UnknownNAT = "Unknown NAT"  # 4
+NATTYPE = (FullCone, RestrictNAT, RestrictPortNAT, SymmetricNAT, UnknownNAT)
 
 class udpclient:
-    def __init__(self,host,port):
+    def __init__(self,host,port,rid,nat_type):
+        if nat_type != None:
+            self.nat_type=NATTYPE[nat_type]
+        else:
+            self.nat_type=self.get_nat_type()   
+        self.rid=rid
         self.serveraddress=(host,port)
         self.clientsocket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        self.punch_target=self.target=None
+        self.rev_event=threading.Event()
+        self.connect_event=threading.Event()
+        self.chat_event=threading.Event()
+
+    def start(self,*args,**kargs):
+        print(self.nat_type)
+        data={
+            'command':'login',
+            'nat_type':self.nat_type,
+            'rid':self.rid,
+        }
+        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
+        self.punch_target=self.serveraddress
+        self.punch()
+        res, _ =self.clientsocket.recvfrom(1024)
+        print(res)
+        try:
+            data=json.loads(res.decode().replace("'",'"'))
+            if "command" in data.keys():
+                command=data['command']
+                if command == "response":
+                    try:
+                        partner_nat_type=data['nat_type']
+                        partner_address=(data['host'],data['port'])
+                    except IndexError:
+                        partner_nat_type=UnknownNAT
+                        print("nat_type or rid not found")
+                        sys.exit(0)
+                    if partner_nat_type != SymmetricNAT and partner_nat_type != UnknownNAT and self.nat_type != SymmetricNAT and self.nat_type != UnknownNAT:
+                        # if self.nat_type == FullCone:
+                        self.punch_target=partner_address
+                        self.chat(partner_address)
+                        # elif self.nat_type == RestrictNAT or self.nat_type == RestrictPortNAT:
+                        #     self.chat(partner_address)                            
+                    else:
+                        print("Symmetric mode start")
+                        self.chat(self.serveraddress,target_host=data['host'],target_port=data['port'])
+        except Exception as e:
+            print(e)
+        # trev_req.setDaemon(True)
+        # trev_req.start()
+        while True:
+            try:
+                time.sleep(0.5)
+            except KeyboardInterrupt:
+                print("exit")
+                sys.exit(0)
+
+    def chat(self,address,**kwargs):
+        print("chat starts")
+        ts = threading.Thread(target=self.send,args=(address,),kwargs=kwargs)
+        ts.setDaemon(True)
+        ts.start()
+        tr = threading.Thread(target=self.recv,args=(address,),kwargs=kwargs)
+        tr.setDaemon(True)
+        tr.start()
+
+    def send(self,address,**kwargs):
+        while True:
+            msg = sys.stdin.readline()
+            data={
+                'command':'msg',
+                'msg':msg,
+            }
+            # print(data)
+            # print(address)
+            if "target_host" in kwargs.keys() and  "target_port" in kwargs.keys():
+                data['target_host'] = kwargs['target_host']
+                data['target_port'] = kwargs['target_port']
+            self.clientsocket.sendto(str(data).encode(), address)
+
+    def recv(self,address,**kwargs):
+        while True:
+            data, addr = self.clientsocket.recvfrom(1024)
+            # print(data,addr)
+            # print(self.serveraddress)
+            if addr == address or addr == self.serveraddress:
+                try:
+                    data=json.loads(data.decode().replace("'",'"'))
+                    if "command" in data.keys():
+                        command = data['command']
+                    if command == "msg":
+                        # print("msg:")
+                        sys.stdout.write(data['msg'])
+                except Exception as e:
+                    print(e)
+
+    def error(self,*args,**kwargs):
+        print(args[0])
+        print('error')
+
+    def logout(self,*args,**kwargs):
+        data={
+            "command":"logout",
+        }
+        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
+        res=self.clientsocket.recvfrom(1024)
+        print(res)
+
+    def close(self,*args,**kwargs):
+        try:
+            self.clientsocket.close()
+        except Exception as e:
+            print(e)
+
+    def connect(self,*args,**kwargs):
+        uid=input("Please input the uid\n")
+        data={
+        'command':'connect',
+        'uid':uid,
+        }
+        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
+        res, _ =self.clientsocket.recvfrom(1024)
+        print(res)
+        try:
+            data=json.loads(res.decode().replace("'",'"'))
+        except Exception as e:
+            print(e)
+
+
+        
+    def punch(self,*args,**kwargs):
+        count=0
+
+        def send(count):
+            data={
+                'command':'punch',
+                }
+            while True:
+                # print(self.punch_target)
+                if self.punch_target!= None:
+                    self.clientsocket.sendto(str(data).encode(),self.punch_target)
+                    count = count + 1
+                    # print(sys.stderr,"punch packet {0} sent to {1} ".format(count,str(self.punch_target)))
+                    # threading.Timer(2,send,args=(count+1,)).start()
+                # else:
+                    # threading.Timer(2,send,args=(count,)).start()
+                time.sleep(2)
+        t=threading.Timer(2,send,args=(count,))
+        t.setDaemon(True)
+        t.start()
 
     @staticmethod
     def get_nat_type():
@@ -296,69 +443,12 @@ class udpclient:
 
         return main()
 
-    def start(self):
-        nat_type=self.get_nat_type()
-        data={
-            'command':'login',
-            'nat_type':nat_type,
-        }
-        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
-        res=self.clientsocket.recvfrom(2048)
-        print(res)
-        while True:
-            command=input("please enter the command:")
-            operation={
-                "login":self.login,
-                "showusers":self.showusers,
-                "connect":self.connect,
-                "logout":self.logout,
-            }
-            if command=="exit":
-                break
-            else:
-                operation.get(command,self.error)()
-        self.close()
-
-    def showusers(self):
-        try:
-            data={
-                "command":"showusers",
-            }
-            self.clientsocket.sendto(str(data).encode(),self.serveraddress)
-            res=self.clientsocket.recvfrom(2048)
-            print(res)
-        except Exception as e:
-            print(e)
-
-    def error(self):
-        print('error')
-        sys.exit()
-        # if not res:
-        #     clientsocket.close()
-
-    def logout(self):
-        data={
-            "command":"logout",
-        }
-        self.clientsocket.sendto(str(data).encode(),self.serveraddress)
-        res=self.clientsocket.recvfrom(2048)
-        print(res)
-
-    def close(self):
-        try:
-            self.clientsocket.close()
-        except Exception as e:
-            print(e)
-
-    def connect(self):
-        data={
-        'command':'login',
-        'nat_type':nat_type,
-        }
-
 if __name__ == "__main__":
     # HOST,PORT="localhost",9999
-    client=udpclient(opts.host,opts.port)
+    if opts.host == "localhost":
+        opts.host ='127.0.0.1'
+    client=udpclient(opts.host,opts.port,opts.rid,opts.nat_type)
+    # client=udpclient("localhost",9999,"100")
     try:
         client.start()
         # client.get_nat_type()

@@ -1,111 +1,165 @@
-# import socketserver,json
-
-# class MyUDPHandler(socketserver.BaseRequestHandler):
-#     """
-#     This class works similar to the TCP handler class, except that
-#     self.request consists of a pair of data and client socket, and since
-#     there is no connection the client address must be given explicitly
-#     when sending data back via sendto().
-#     """
-#     def __init__(self, request, client_address, server):
-#         super(MyUDPHandler,self).__init__(request, client_address, server)
-#         self.userlist=[]
-#         self.uidstart=0
-#     def handle(self):
-#         data = self.request[0].decode().replace("'",'"')
-#         socket = self.request[1]
-#         print("{0},{1} wrote:".format(self.client_address[0],self.client_address[1]))
-#         print(data)
-#         data=json.loads(data)
-#         print(data)
-#         if data["command"] == "login":
-#             print("has a user login:{0[0]}:{0[1]}".format(self.client_address))
-#             userinfo={
-#                 "ip":self     .client_address[0],
-#                 'port':self.client_address[1],
-#                 "uid":self.uidstart,
-#             }
-#             self.userlist.append(userinfo)
-#             print(self.userlist)
-        # socket.sendto(data.upper(), self.client_address)
 from socket import *
-import json,sys
+import json
+import sys
+FullCone = "Full Cone"  # 0
+RestrictNAT = "Restrict NAT"  # 1
+RestrictPortNAT = "Restrict Port NAT"  # 2
+SymmetricNAT = "Symmetric NAT"  # 3
+UnknownNAT = "Unknown NAT"  # 4
 class udpserver:
-    def __init__(self,HOST,PORT):
-        self.server_address=(HOST,PORT)
-        self.users={
-            'userlist':[],
-            'uidstart':0,
-        }
-        self.data=self.client_address=None
+    def __init__(self,PORT):
+        self.users={}
+        self.client_address=None
         
     def start(self):
         self.s = socket(AF_INET,SOCK_DGRAM)  
-        self.s.bind((HOST,PORT))  
-        print('...waiting for message..') 
+        self.s.bind(("",PORT))  
+        print('...waiting for message..')
+        command=None 
         while True:  
-            self.data,self.client_address = self.s.recvfrom(1024)  
-            print(self.data,self.client_address)
-            self.data=json.loads(self.data.decode().replace("'",'"'))
-            operation={
-                "login":self.login,
-                "showusers":self.showusers,
-                "connect":self.connect,
-                "logout":self.logout,
-            }
-            operation.get(self.data["command"],self.error)()
-            # self.s.sendto(b'this is the UDP server',self.client_address)
+            data,client_address = self.s.recvfrom(1024)  
+            # print(data,client_address)
+            try:
+                data=json.loads(data.decode().replace("'",'"'))
+                if "command" in data.keys():
+                    command=data['command']
+                    # print(command)
+                    if command == "login":
+                        print("has a user login:{0[0]}:{0[1]}".format(client_address))
+                        try:
+                            nat_type=data['nat_type']
+                            rid=data['rid']
+                        except IndexError:
+                            nat_type=rid=None
+                            print("nat_type or rid not found")
+                            break
+                        self.adduser(nat_type,rid,client_address)
+                        if len(self.users[rid]) ==2:
+                            print("try linking...")
+                            userinfo=self.users[rid]
+                            for index,info in enumerate(userinfo):
+                                if info['address'] == client_address:
+                                    client_info=info
+                                if index == 1:
+                                    partner_info=userinfo[0]
+                                else:
+                                    partner_info=userinfo[1]
+                            data={
+                                'command':'response',
+                                'nat_type':partner_info['nat_type'],
+                                'host':partner_info['address'][0],
+                                'port':partner_info['address'][1],
+                            }
+                            self.s.sendto(str(data).encode(),client_address)
+                            data['nat_type']=client_info['nat_type']
+                            data['host']=client_info['address'][0]
+                            data['port']=client_info['address'][1]
+                            self.s.sendto(str(data).encode(),partner_info['address'])
+                    elif command =="msg":
+                        try:
+                            print(data)
+                            target=(data['target_host'],data['target_port'])
+                            print(target)
+                            self.s.sendto(str(data).encode(),target)
+                        except IndexError as e:
+                            print(e)
+                        # print
+                        # print("has("\n") a user login:{0[0]}:{0[1]}".format(client_address))
+                        # print("punch packet received from {0}".format(str(client_address)))
+                    elif command == "punch":
+                        pass
+                    else:
+                        print("Unkown command")
+            except Exception as e:
+                print(e)
 
-    def login(self):
-        print("has a user login:{0[0]}:{0[1]}".format(self.client_address))
-        if self.users['userlist']!=[]:
-            for i in self.users['userlist']:
-                if self.client_address == i['address']:
-                    self.s.sendto(b'Alread logged in',self.client_address)
-                    break
-            else:
-                self.adduser()
-        else:
-            self.adduser()
+            # operation={
+            #     "login":self.login,
+            #     # "showusers":self.showusers,
+            #     # "connect":self.connect,
+            #     # "logout":self.logout,
+            #     "punch":self.punch_rev,
+            # }
+            # operation.get(data["command"],self.error)(data,client_address)
+            # try:
+            # nat_type=data['nat_type']
+            # rid=data['rid']
+            # self.s.sendto(b'this is the UDP server',client_address)
+
+    def login(self,data,client_address):
+        print("has a user login:{0[0]}:{0[1]}".format(client_address))
+        # if self.users['userlist']!=[]:
+        #     for i in self.users['userlist']:
+        #         if client_address == i['address']:
+        #             self.s.sendto(b'Alread logged in',client_address)
+        #             break
+        #     else:
+        #         self.adduser(data,client_address)
+        # else:
+        self.adduser(data,client_address)
           
 
-    def adduser(self):
-        try:
-            nat_type=self.data['nat_type']
-        except IndexError:
-            nat_type=None
+    def adduser(self,nat_type,rid,client_address):
         userinfo={
-            "address":self.client_address,
-            "nat_type":nat_type,
-            "uid":self.users['uidstart'],
+            'address':client_address,
+            'nat_type':nat_type,
             }
-        self.users['userlist'].append(userinfo)
-        self.users['uidstart'] = self.users['uidstart']+1
-        self.s.sendto(b'login succeeded',self.client_address) 
+        print("userinfo:",userinfo)
+        if not rid in self.users.keys():
+            print("None")
+            self.users[rid]=[]
+        self.users[rid].append(userinfo)
+        print(self.users)
+        # self.users['uidstart'] = self.users['uidstart']+1
+        # self.s.sendto(b'login succeeded',client_address) 
 
-    def error(self):
-        self.s.sendto(b'error happens',self.client_address)
+    def error(self,_,client_address):
+        print("error happened")
         self.close()
 
-    def showusers(self):
-        self.s.sendto(str(self.users['userlist']).encode(),self.client_address)
+    # def showusers(self,_,client_address):
+    #     self.s.sendto(str(self.users['userlist']).encode(),client_address)
             
 
-    def connect(self):
-        pass
-    def logout(self):
+    def connect(self,data,client_address):
+        partner_info=requester_info=None
+        try:
+            uid=data['uid']
+            print("recieve connect request")
+        except IndexError :
+            self.s.sendto(b"please send uid",client_address)
+        for userinfo in self.users['userlist']:
+            if str(uid)==str(userinfo['uid']):
+                partner_info=userinfo
+                break
+        else:
+            print("partner uid no found")
+        for userinfo in self.users['userlist']:
+            if client_address==userinfo['address']:
+                requester_info=userinfo
+                break
+        else:
+            print("requester uid no found")
+        if partner_info and requester_info:
+            self.s.sendto(str(partner_info).encode(),client_address)
+            self.s.sendto(str(requester_info).encode(),partner_info['address'])
+
+    def logout(self,_,client_address):
         for index,item in enumerate(self.users['userlist']):
-            if item['address']==self.client_address:
+            if item['address']==client_address:
                 self.users['userlist'].pop(index)
                 break
-        self.showusers()
+        self.showusers(_,client_address)
+
+    def punch_rev(self,_,client_address):
+        print("punch packet received from {0}".format(str(client_address)))
 
     def close(self):  
         self.s.close()  
 
 if __name__ == "__main__":
-    HOST,PORT="localhost",9999
-    server=udpserver(HOST,PORT)
+    PORT=9999
+    server=udpserver(PORT)
     try:
         server.start()
     except Exception as e:
