@@ -1,14 +1,16 @@
 # tunp2p
 ## Usage
 ### Server.py
-```Usage: server.py -P port
+```
+Usage: server.py -P port
 
     Options:  
     -h, --help            show this help message and exit  
     -P PORT, --port=PORT  target's port default:9999
 ```
 ### Client.py
-```client.py -H host -P port [-R RID [-N nat-type] ]  
+```
+client.py -H host -P port [-R RID [-N nat-type] ]  
 
     Options:
       -h, --help            show this help message and exit
