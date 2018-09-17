@@ -20,7 +20,7 @@ class udpserver:
         
     def start(self):
         self.s = socket(AF_INET,SOCK_DGRAM)  
-        self.s.bind(("",PORT))  
+        self.s.bind(("",opts.port))  
         print('...waiting for message..')
         command=None 
         while True:  
